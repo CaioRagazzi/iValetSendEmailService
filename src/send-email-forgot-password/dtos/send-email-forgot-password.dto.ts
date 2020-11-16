@@ -10,8 +10,8 @@ export class SendEmailForgotPasswordDto {
     subject: string;
 
     @IsNotEmpty()
-    @IsString()
-    userId: string;
+    @IsNumber()
+    userId: number;
 
     @IsNotEmpty()
     @IsString()
