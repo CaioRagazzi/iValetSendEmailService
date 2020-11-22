@@ -15,12 +15,12 @@ export class SendEmailForgotPasswordController {
   @Post('')
   async sendEmail(
     @Body() message: SendEmailForgotPasswordDto,
-  ): Promise<void> {
+  ): Promise<string> {
     try {
       this.sendEmailForgotPasswordService.sendEmail(message);
-    } catch (error) {
-        console.log(error);
-        
+
+      return 'E-mail enviado com sucesso!';
+    } catch (error) {        
       throw new HttpException(error.sqlMessage, HttpStatus.BAD_REQUEST);
     }
   }

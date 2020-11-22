@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
+import { HttpModule, Module } from '@nestjs/common';
 import { SendEmailForgotPasswordService } from './send-email-forgot-password.service';
 import { SendEmailForgotPasswordController } from './send-email.-forgot-password.controller';
 
 @Module({
-  imports: [],
+  imports: [HttpModule],
   controllers: [SendEmailForgotPasswordController],
   providers: [SendEmailForgotPasswordService],
 })
