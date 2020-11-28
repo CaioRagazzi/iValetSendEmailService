@@ -10,17 +10,19 @@ import { SendEmailForgotPasswordService } from './send-email-forgot-password.ser
 
 @Controller('sendEmailForgotPassword')
 export class SendEmailForgotPasswordController {
-  constructor(private sendEmailForgotPasswordService: SendEmailForgotPasswordService) {}
+  constructor(
+    private sendEmailForgotPasswordService: SendEmailForgotPasswordService,
+  ) {}
 
   @Post('')
   async sendEmail(
     @Body() message: SendEmailForgotPasswordDto,
-  ): Promise<string> {
+  ): Promise<{ message: string }> {
     try {
-      this.sendEmailForgotPasswordService.sendEmail(message);
+      await this.sendEmailForgotPasswordService.sendEmail(message);
 
-      return 'E-mail enviado com sucesso!';
-    } catch (error) {        
+      return { message: 'E-mail enviado com sucesso!' };
+    } catch (error) {
       throw new HttpException(error.sqlMessage, HttpStatus.BAD_REQUEST);
     }
   }

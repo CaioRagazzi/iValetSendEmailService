@@ -1,10 +1,11 @@
-import { HttpService, Injectable } from '@nestjs/common';
+import { HttpService, Injectable, Logger } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import { MailOptions } from 'nodemailer/lib/json-transport';
 import Mail from 'nodemailer/lib/mailer';
 import { AES } from 'crypto-js';
 import { getYear, getMonth, getDate, getHours, getMinutes } from 'date-fns';
 import { SendEmailForgotPasswordDto } from './dtos/send-email-forgot-password.dto';
+import { connect } from 'amqplib';
 
 @Injectable()
 export class SendEmailForgotPasswordService {
@@ -21,6 +22,8 @@ export class SendEmailForgotPasswordService {
         pass: process.env.EMAIL_PASSWORD,
       },
     });
+
+    this.listenToQueue();
   }
 
   async sendEmail(message: SendEmailForgotPasswordDto): Promise<void> {
@@ -66,5 +69,28 @@ export class SendEmailForgotPasswordService {
       });
 
     return user;
+  }
+
+  async listenToQueue() {
+    const connection = connect('amqp://localhost');
+
+    connection
+      .then(conn => {
+        return conn.createChannel();
+      })
+      .then(ch => {
+        return ch
+          .assertQueue('email_service', { durable: false })
+          .then((ok) => {
+            return ch.consume('email_service', msg => {
+              const mstToSendEmail = JSON.parse(msg.content.toString());
+
+              this.sendEmail({to: mstToSendEmail.to})
+
+              ch.ack(msg);
+            });
+          });
+      })
+      .catch(console.warn);
   }
 }
