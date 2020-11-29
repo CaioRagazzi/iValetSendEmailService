@@ -26,4 +26,9 @@ export class SendEmailForgotPasswordController {
       throw new HttpException(error.sqlMessage, HttpStatus.BAD_REQUEST);
     }
   }
+
+  @Post('testkafka')
+  async sendEmail2(): Promise<void> {
+    this.sendEmailForgotPasswordService.listenToKafka();
+  }
 }

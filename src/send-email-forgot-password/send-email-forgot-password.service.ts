@@ -6,6 +6,7 @@ import { AES } from 'crypto-js';
 import { getYear, getMonth, getDate, getHours, getMinutes } from 'date-fns';
 import { SendEmailForgotPasswordDto } from './dtos/send-email-forgot-password.dto';
 import { connect } from 'amqplib';
+import { Consumer, Kafka, TopicPartitionOffsetAndMedata } from 'kafkajs';
 
 @Injectable()
 export class SendEmailForgotPasswordService {
@@ -13,6 +14,7 @@ export class SendEmailForgotPasswordService {
   options: MailOptions = {
     from: process.env.EMAIL_USER,
   };
+  consumer: Consumer;
 
   constructor(private httpService: HttpService) {
     this.transporter = createTransport({
@@ -22,13 +24,24 @@ export class SendEmailForgotPasswordService {
         pass: process.env.EMAIL_PASSWORD,
       },
     });
+    const kafka = new Kafka({
+      clientId: 'i-valet-email-service',
+      brokers: ['localhost:9092'],
+    });
 
-    this.listenToQueue();
+    this.consumer = kafka.consumer({
+      groupId: 'i-valet-email-service-forgot-email-send',
+      readUncommitted: true,
+      retry: {
+        maxRetryTime: 5000,
+      },
+    });
+
+    this.listenToKafka();
   }
 
   async sendEmail(message: SendEmailForgotPasswordDto): Promise<void> {
     const user = await this.getUserByEmail(message.to);
-
     const currentDate = new Date();
     const year = getYear(currentDate);
     const month = getMonth(currentDate);
@@ -55,42 +68,40 @@ export class SendEmailForgotPasswordService {
     this.options.html = text;
 
     this.transporter.sendMail(this.options);
+    console.log('enviando email');
   }
 
   async getUserByEmail(email) {
-    let user;
-    await this.httpService
-      .get('http://localhost:3000/user/email/me', { params: { email } })
-      .toPromise()
-      .then(response => {
-        if (response.data) {
-          user = response.data;
-        }
-      });
+    try {
+      const promise = await this.httpService
+        .get('http://localhost:3000/user/email/me', { params: { email } })
+        .toPromise();
 
-    return user;
+      return promise.data;
+    } catch (error) {
+      throw new Error(error);
+    }
   }
 
-  async listenToQueue() {
-    const connection = connect('amqp://localhost');
+  async listenToKafka() {
+    await this.consumer.connect();
+    await this.consumer.subscribe({
+      topic: 'send_forgot_email',
+      fromBeginning: true,
+    });
 
-    connection
-      .then(conn => {
-        return conn.createChannel();
-      })
-      .then(ch => {
-        return ch
-          .assertQueue('email_service', { durable: false })
-          .then((ok) => {
-            return ch.consume('email_service', msg => {
-              const mstToSendEmail = JSON.parse(msg.content.toString());
+    await this.consumer.run({
+      autoCommit: false,
+      eachMessage: async ({ topic, partition, message }) => {
+        const offsets: TopicPartitionOffsetAndMedata[] = [];
+        await this.sendEmail({ to: JSON.parse(message.value.toString()).to });
+        offsets.push({ topic, partition, offset: message.offset });
+        this.commitOffsets(offsets);
+      },
+    });
+  }
 
-              this.sendEmail({to: mstToSendEmail.to})
-
-              ch.ack(msg);
-            });
-          });
-      })
-      .catch(console.warn);
+  commitOffsets(topic: TopicPartitionOffsetAndMedata[]) {
+    this.consumer.commitOffsets(topic);
   }
 }
